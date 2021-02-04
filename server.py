@@ -20,15 +20,14 @@
 """An HTTP service that renders chess board images"""
 
 import argparse
-import asyncio
 import aiohttp.web
 import chess
 import chess.svg
 import cairosvg
 import json
 import os
-import re
-
+from PIL import Image
+import io
 
 def load_theme(name):
     with open(os.path.join(os.path.dirname(__file__), f"{name}.json")) as f:
@@ -101,8 +100,18 @@ class Service:
 
     async def render_png(self, request):
         svg_data = self.make_svg(request)
-        png_data = cairosvg.svg2png(bytestring=svg_data)
+        png_data = cairosvg.svg2png(bytestring=svg_data, dpi=512)
         return aiohttp.web.Response(body=png_data, content_type="image/png")
+
+    async def render_jpeg(self, request):
+        svg_data = self.make_svg(request)
+        png_data = cairosvg.svg2png(bytestring=svg_data, dpi=512)
+        png_data = io.BytesIO(png_data)
+        image = Image.open(png_data)
+        image = image.convert('RGB')
+        jpg_data = io.BytesIO()
+        image.save(jpg_data, 'jpeg', quality=100)
+        return aiohttp.web.Response(body=jpg_data.getvalue(), content_type="image/jpeg")
 
 
 if __name__ == "__main__":
@@ -115,5 +124,6 @@ if __name__ == "__main__":
     service = Service()
     app.router.add_get("/board.png", service.render_png)
     app.router.add_get("/board.svg", service.render_svg)
+    app.router.add_get("/board.jpeg", service.render_jpeg)
 
     aiohttp.web.run_app(app, port=args.port, host=args.bind, access_log=None)
